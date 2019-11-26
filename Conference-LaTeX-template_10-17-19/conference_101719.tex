@@ -32,17 +32,19 @@ Our evaluation shows that the proposed architecture can achieve 20$\times$/1820$
 
 Precision medicine has become a promising and an efficient approach to clinical diagnosis that allows patients to be treated with the personalized medicine based on a genetic understanding of their disease. For instance, people with melanoma, leukemias, and different kinds of cancers, e.g., breast, lung, colon, and rectal, usually have their tumours to be tested for certain genetic changes when they are  diagnosed~\cite{shendure2008next,chang2016smem,cong2017aim}. 
 It is predicted that by 2025, 1 billion people will have their own genome records, which will generate up to 40 exabytes genomic data per year~\cite{stephens2015big}. 
-This increasing huge data in turn has led to a upsurge of genetic analysis~\cite{}. The first and critical processing step is alignment, which performed per-read group and consists of mapping each individual read pair to the reference genome. To keep pace with rapid growing genome data, acceleration of alignment phase is necessary.
+This increasing huge data in turn has led to a upsurge of genetic analysis tools~\cite{}. 
 
-Basically, all alignment algorithms generally follow a \textit{seed-and-extend} model, where \textit{seed} represents a sequence index-search to collect all candidates of exact matches, and \textit{extend} is an inexact match to extend the candidates with a scoring method. 
+The first and critical processing step is alignment, which performed per-read group and consists of mapping each individual read pair to the reference genome. Basically, all alignment algorithms generally follow a \textit{seed-and-extend} model, where \textit{seed} represents a sequence index-search to collect all candidates of exact matches, and \textit{extend} is an inexact match to extend the candidates with a scoring method. 
 Depending on different generations of sequencing~\cite{}, the time cost of seed and extend varies sharply. 
 The reason is that the de facto standard for \textit{extend} is Smith-Waterman dynamic programming algorithm with time complexity as \textit{\textit{O}($N^2$)}, where \textit{N} is the length of sequence reads. 
 Commonly, the length of sequence reads of NGS is as short as $50 - 200$ base-pairs (A, C, G, T), which is much shorter than that of the first or the third generation of sequencing. 
 Unfortunately, Darwin-like coprocessors are not designed to process such short reads since its thousand times speedup depends on the parallelism exposed by aligning long reads (e.g., >1K base-pair). Darwin coprocessors work well on alignment algorithms for long sequence reads only and when \textit{extend} dominates mapping time.
 However, when processing NGS reads, \textit{extend} is not the performance bottleneck. 
-The execution time of the most widely used reads alignment tool BWA~\cite{li2013aligning} is dominated 29\% to 70\% by the prior procedure \textit{FM-index search} of \textit{extend} to find exact matched seeds.
+The execution time of the most widely used reads alignment tool BWA~\cite{li2013aligning} is dominated 29\% to 70\% by the prior procedure \textit{FM-index search} of \textit{extend} to find exact matched seeds. However, FM-index has not been well studied because of its two challenges: 
 
-However, FM-index has not been well studied because of its two challenges: (1) massive random memory access that leads to huge data movement between processing units and memory in traditional von Neumann architecture; (2) Inherent parallelism in seeding putting more accelerators may not provide additional speedup due to off-chip bandwidth limitations. However, FM-index has not been well studied because of its two challenges: (1) massive random memory access that leads to huge data movement between processing units and memory in traditional von Neumann architecture; (2) Inherent parallelism in seeding putting more accelerators may not provide additional speedup due to off-chip bandwidth limitations.
+First, massive random memory access leads to huge data movement between processing units and memory on traditional von Neumann architecture~\cite{}, which results in resulting in bottlenecks of both performance and energy~\cite{}. Various compute-centric hardware approaches, such as multi-core~\cite{}, GPU~\cite{}, and FPGA~\cite{} have been explored to accelerate DNA seeding. However, innovations that only focus on the computation have limited space for improvement, since DNA seeding is memory bound~\cite{}. 
+
+Second, \textit{system performance is limited by the main memory capacity and bandwidth per server.} Due to the pin count limitation per chip, For instance, Kocberber et al.~\cite{Kocberber:2013bb} observed that using more than four index traversal units. Wang et al.~\cite{yuanrong} observed that using more than 48 PEs will not provide additional speedup due to off-chip bandwidth limitations. 
 
 In this paper, we show that processing-in-memory (PIM) can be a key enabler to accelerate genomic data processing with memory-capacity-proportional performance under the current pin count limitation. 
 To investigate the potential benefits of PIM, we first delve into a critical algorithm, FM-index, to understand what underlying functions and characteristics contribute the most to data movement. From our observation, FM-index is with simple functions and primitives (which we refer to as small computation) that are responsible for a significant fraction of the total data movement. Therefore, PIM architectures are promising for design FM-index accelerators to overcome the bandwidth bottleneck. Our design is driven by application characteristics and budget of device. First, due to the strict area budget of PEs of FM-index, the compute logic is required to be fairly simple yet efficient; Second, inherent massive parallelism in FM-index drives an efficient mechanism for communication between PEs resided on a the logic layer of PIM. 
@@ -98,13 +100,14 @@ Previous work~\cite{yuanrong} shows that for FM-index search, only a few types o
 \begin{figure*}[t]
 \centering
 %\vspace{-3pt}
-\includegraphics[width=\linewidth]{fig/hpca20-v4.pdf}
+%\includegraphics[width=\linewidth]{fig/hpca20-v4.pdf}
+\includegraphics[scale=0.35]{fig/hpca20-v4.pdf}
 \caption{Architecure overview of GeneF accelerator (a) Network of Cubes, (b) Overview of a cube, (c) Data Mapping (d) Vault overview, (e) Vault}
 \label{fig:arch_design}
 \end{figure*}
 
-This section elaborates the design of GeneF. We start with GeneF overview in Section~\ref{sec:arch:overview}.
-The Data Mapping Mechanism is further elaborated on in Section~\ref{sec:arch:data}. We introduce a Lightweight Message Passing Mechanism in Section~\ref{sec:arch:message}. Then we take a look at the Prefetch Mechanism to enable each GeneF core to exploit the high available memory bandwidth in Section~\ref{sec:arch:prefetch}. Finally, we explore the number of PE configurations under each vault in Section~\ref{sec:arch:pe_number}.
+%This section elaborates the design of GeneF. We start with GeneF overview in Section~\ref{sec:arch:overview}.
+%The Data Mapping Mechanism is further elaborated on in Section~\ref{sec:arch:data}. We introduce a Lightweight Message Passing Mechanism in Section~\ref{sec:arch:message}. Then we take a look at the Prefetch Mechanism to enable each GeneF core to exploit the high available memory bandwidth in Section~\ref{sec:arch:prefetch}. Finally, we explore the number of PE configurations under each vault in Section~\ref{sec:arch:pe_number}.
 
 \subsection{Overview}
 \label{sec:arch:overview}
@@ -136,19 +139,13 @@ To solve the challenge, we moves computation to the target PEs that contains the
 
 
 \begin{itemize}
-    \item \textit{READ\#:}~Request or respond number of the corresponding DNA sequence (read). We keep 4 to 8 read slots reserved in the Input Queue, so the ID only needs 3-bit to represent after read has been issued.
-    
-    \item \textit{RES/RESP:}~Request message indicates that this message is sent by other DRAM partition and needs to be processed on this vault; the response message indicates the index update value returned by other vaults after completing the LF mapping operation. Since only the request/response cases are involved, this field only needs one bit to mark.
-    
+    \item \textit{READ\#:}~Request or respond to the corresponding read number. We have 4 to 8 read spaces reserved for the read slot in the Input Queue, so the ID only needs 3-bit to represent.
+    \item \textit{RES/RESP:}~Request or response ID, this field only needs one bit to mark.
     \item \textit{SRC/DEST:}~Source vault and destination vault ID. Since each group of vaults is numbered from 0 to 15, this field requires only 4 bits.
-    
-    \item \textit{SP\_V/EP\_V:}~SP/EP valid flag bit. These two flags respectively mark whether the SP and EP fields in this message are valid. If both SP\_V and EP\_V are 1, it means that the two BWT ranks pointed to by (sp,ep) in this iteration are in the same vault. Otherwise, only one of the two fields is valid, indicating that the data pointed to by sp and ep are distributed in different vaults, but this situation is rare. This is because according to the average principle, the first two bases have been determined when the (sp,ep) interval has been determined. At the base time, the BWT positions corresponding to the suffixes of the first two bases will fall within the same vault. Even if it is slightly uneven, the data can be arranged in the same way as the first two bases. For example, data with prefix "AA..." should be put into vault 0, "AC..." is placed at vault 1, and as such, "TT..." is placed at vault 15. Thus, when querying the first base, although the interval may span multiple memory regions, it is possible to record the regional distribution of the first base in advance, and directly go to the corresponding position for processing, while the first base is processed. After that, all (sp, ep) tuple BWT data will fall on the same vault, that is, each iteration only needs to send a request to the destination vault.
-    
-    \item \textit{READ[C]:}~This field stores 2 bits of the target base of the current iteration.
-    
+    \item \textit{SP\_V/EP\_V:}~SP/EP valid flag bit. These two flags respectively mark whether the SP and EP fields in this message are valid, 1 represents valid, and 0 represents invalid.
     \item \textit{SP/EP:}~The index (and the updated index) storage area. The request message needs to carry the (sp,ep) index value, and the reply message also needs to return the updated (sp,ep) index. Both sp and ep in the original algorithm require 64-bit storage. According to the reference address range and the range of vault access, only 30 digits can meet the needs.
-    
 \end{itemize}
+
 
 \begin{figure}[htbp]
     \centering
@@ -228,25 +225,14 @@ Figure~\ref{fig:energy} shows the normalized energy consumption of HMCs in HMC-b
 We found that the logic layer energy density of the accelerator is 20.7mW/mm$^{2}$ which is far below its upper limit of 133mW/mm$^{2}$. The area of PE logic of the accelerator is about 5.1mm2, which is only about 2.3\% of the entire logical layer area. We conclude that GeneF is thermally feasible and leads to greatly reduced energy consumption. GeneF achieved 7032$\times$ and 6687$\times$ energy efficiency in \textit{count stage} and \textit{determine stage}, respectively.
 
 \subsection{Sensitivity Study about Read Length}
-Since GeneF is an application-driven accelerator that is specifically designed to accelerate the FM-index algorithm. For applications such as BWA-MEM and Bowtie, all of their core algorithms are based on FM-index, their acceleration for these applications is reflected in the performance improvement of FM-index. As mentioned before, in order to balance the efficiency and accuracy, many applications adopt the seed-extension model, which integrates dynamic programming algorithms (such as Smith-Waterman) on the basis of FM-index exact matching to perform inexact matching expansion of seeds. In order to explore the performance impact of GeneF on these applications, we also need to consider the impact of dynamic programming algorithms. We take BWA-MEM as an example, which is the fastest, the most accurate and widely used software based on the seed-and-extended mode. We take the state-of-art optimization Darwin~\cite{turakhia2018darwin} as the baseline of Smith-Waterman algorithm. As shown in Figure~\ref{fig:sen}, if we only accelerate the dynamic programming part of BWA-MEM, even with the powerful hardware acceleration method in~\cite{turakhia2018darwin}, the overall speedup of BWA-MEM is only 2.2$\times$ higher with 16-thread, due to the FM-index algorithm in BWA-MEM accounts for a large amount of execution time. After using GeneF to optimize FM-index part, combined with the dynamic programming hardware accelerator in~\cite{turakhia2018darwin}, the speedup can be increased by more than 1000 times when read length is 101bp, which is typical with the next generation sequencing technology~\cite{depristo2011framework, fujiki2018genax}, thus we choose 101 as the representative length. 
+%Since GeneF is an application-driven accelerator that is specifically designed to accelerate the FM-index algorithm. For applications such as BWA-MEM and Bowtie, all of their core algorithms are based on FM-index, their acceleration for these applications is reflected in the performance improvement of FM-index. As mentioned before, in order to balance the efficiency and accuracy, many applications adopt the seed-extension model, which integrates dynamic programming algorithms (such as Smith-Waterman) on the basis of FM-index exact matching to perform inexact matching expansion of seeds. In order to explore the performance impact of GeneF on these applications, we also need to consider the impact of dynamic programming algorithms. 
+
+We take BWA-MEM as an example, which is the fastest, the most accurate and widely used software based on the seed-and-extended mode. We take the state-of-art optimization Darwin~\cite{turakhia2018darwin} as the baseline of Smith-Waterman algorithm. As shown in Figure~\ref{fig:sen}, if we only accelerate the dynamic programming part of BWA-MEM, even with the powerful hardware acceleration method in~\cite{turakhia2018darwin}, the overall speedup of BWA-MEM is only 2.2$\times$ higher with 16-thread, due to the FM-index algorithm in BWA-MEM accounts for a large amount of execution time. After using GeneF to optimize FM-index part, combined with the dynamic programming hardware accelerator in~\cite{turakhia2018darwin}, the speedup can be increased by more than 1000 times when read length is 101bp, which is typical with the next generation sequencing technology~\cite{depristo2011framework, fujiki2018genax}, thus we choose 101 as the representative length. 
 
 In fact, GeneF can support reads with different lengths from the next generation sequencing technology. In Figure~\ref{fig:sen} we show the experimental results with reads with various length. For the design, proposed method provides higher speedup (over CPU) for longer reads, in which cases memory traffic increases and benefits more from our near-data computing architecture. We expect similar gain when the read length is even longer, since the ultra-long read seeding is still a memory bound problem, which our architecture is good at.
 
 \section{Conclusion}
 In this paper, we analyze compute and memory characteristics of FM-index, and find that data movement contributes to a significant portion of the total energy consumption. Our analysis reveals that the majority of this data movement comes from a number of simple functions. We revisit the processing-in-memory concept in the new context of (1) simple but effective integration of logic and memory through 3D stacking and (2) emerging genomic processing requires large amount of memory bandwidth. To this end, we propose a PIM accelerator for DNA alignment. GeneF fratures (1) many customized RISC-V based PEs inside a 3D stacking memory, (2) a light message mechanism that can hide remote access latency using in-place computing, (3) specialized prefetchers for simpler PE design. We showed that GeneF significantly outperforms traditional CPUs and ASIC implementations in terms of both performance and energy efficiency. We conclude that reducing data movement via processing-in-memory is a promising approach to improve both the performance and energy efficiency of genomic workloads in the future.
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 \begin{thebibliography}{00}
