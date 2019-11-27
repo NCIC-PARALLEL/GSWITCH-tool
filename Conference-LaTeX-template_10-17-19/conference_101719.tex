@@ -28,11 +28,9 @@ Our evaluation shows that the proposed architecture can achieve 20$\times$/1820$
 \end{abstract}
 
 \section{Introduction}
-\todo[inline, color=green!40]{sequencing data-alignment-fm-index-pim}
-
 Precision medicine has become a promising and an efficient approach to clinical diagnosis that allows patients to be treated with the personalized medicine based on a genetic understanding of their disease. For instance, people with melanoma, leukemias, and different kinds of cancers, e.g., breast, lung, colon, and rectal, usually have their tumours to be tested for certain genetic changes when they are  diagnosed~\cite{shendure2008next,chang2016smem,cong2017aim}. 
 It is predicted that by 2025, 1 billion people will have their own genome records, which will generate up to 40 exabytes genomic data per year~\cite{stephens2015big}. 
-This increasing huge data in turn has led to a upsurge of genetic analysis tools~\cite{}. 
+This increasing huge data in turn has led to a upsurge of genetic analysis tools~\cite{}.
 
 The first and critical processing step is alignment, which performed per-read group and consists of mapping each individual read pair to the reference genome. Basically, all alignment algorithms generally follow a \textit{seed-and-extend} model, where \textit{seed} represents a sequence index-search to collect all candidates of exact matches, and \textit{extend} is an inexact match to extend the candidates with a scoring method. 
 Depending on different generations of sequencing~\cite{}, the time cost of seed and extend varies sharply. 
@@ -44,7 +42,7 @@ The execution time of the most widely used reads alignment tool BWA~\cite{li2013
 
 First, massive random memory access leads to huge data movement between processing units and memory on traditional von Neumann architecture~\cite{}, which results in resulting in bottlenecks of both performance and energy~\cite{}. Various compute-centric hardware approaches, such as multi-core~\cite{}, GPU~\cite{}, and FPGA~\cite{} have been explored to accelerate DNA seeding. However, innovations that only focus on the computation have limited space for improvement, since DNA seeding is memory bound~\cite{}. 
 
-Second, \textit{system performance is limited by the main memory capacity and bandwidth per server.} Due to the pin count limitation per chip, For instance, Kocberber et al.~\cite{Kocberber:2013bb} observed that using more than four index traversal units. Wang et al.~\cite{yuanrong} observed that using more than 48 PEs will not provide additional speedup due to off-chip bandwidth limitations. 
+\textcolor{blue}{Second, \textit{system performance is limited by the main memory capacity and bandwidth per server.} Due to the pin count limitation per chip, For instance, Kocberber et al.~\cite{Kocberber:2013bb} observed that using more than four index traversal units. Wang et al.~\cite{yuanrong} observed that using more than 48 PEs will not provide additional speedup due to off-chip bandwidth limitations.}
 
 In this paper, we show that processing-in-memory (PIM) can be a key enabler to accelerate genomic data processing with memory-capacity-proportional performance under the current pin count limitation. 
 To investigate the potential benefits of PIM, we first delve into a critical algorithm, FM-index, to understand what underlying functions and characteristics contribute the most to data movement. From our observation, FM-index is with simple functions and primitives (which we refer to as small computation) that are responsible for a significant fraction of the total data movement. Therefore, PIM architectures are promising for design FM-index accelerators to overcome the bandwidth bottleneck. Our design is driven by application characteristics and budget of device. First, due to the strict area budget of PEs of FM-index, the compute logic is required to be fairly simple yet efficient; Second, inherent massive parallelism in FM-index drives an efficient mechanism for communication between PEs resided on a the logic layer of PIM. 
@@ -62,6 +60,7 @@ The main contributions of this paper are as follows:
     \item We proposed a specialized prefetcher that decouple data access logic from PEs, which can fully utilize the memory bandwidth.
     
     \item Our evaluation showed that GeneF outperforms the best available ASIC solution by 20$\times$. Compared to the state-of-the-art software solution BWA-MEM on conventional systems, we get 1820$\times$ performance speedup and 7032$\times$ energy efficiency gain.
+    
 \end{itemize}
 
 \section{Background and Motivation}
@@ -70,7 +69,7 @@ The main contributions of this paper are as follows:
 Full-text minute-space (FM) index~\cite{bwt} is the widely used kernels in many align tools~\cite{ahmed2016comparison}, which follows the seed-and-extend model. The seeding stage needs to \textbf{exactly} align seeds of the reads back to the reference genome without any gap as shown in Figure~\ref{fig:algo-fm}. An FM-index is created by first taking the Burrows-Wheeler transform (BWT) of the input text in the following steps. For example, \circled{1} the genome string T = "abracadabra\$", \circled{2} and here it is represented by the matrix M where each row is a rotation of the text, and the rows have been sorted lexicographically. \circled{3} The BWT of the genome string T = "abracadabra\$" is "ard\$rcaaaabb", which is the last column labeled \textbf{L} of matrix M. The data structure has two features, the first xxx. The second is is the i character occurrence of a character c in the last column has the same rank as the ith occurrence of c in the first column. Thus, searching the query seed is done by a last-to-first mapping with the fomula, which can be defined as LF(i) = C[L[i]] + Occ(L[i], i). The C[L[i]] represents the number of symbols in BWT that are lexicographically smaller than character a. Occ(L[i], i) is the number of occurrences of a in the BWT string of the reference genome based on current position i, C[L[i]].
 \begin{figure}[htbp]
 \centering
-\includegraphics[scale=0.30]{Conference-LaTeX-template_10-17-19/fig/algo-fm.pdf}
+\includegraphics[scale=0.25]{Conference-LaTeX-template_10-17-19/fig/fm-algo.pdf}
 \caption{An example of data structures in FM-index based mapping}
 \label{fig:algo-fm}
 \end{figure}
@@ -234,18 +233,8 @@ In fact, GeneF can support reads with different lengths from the next generation
 \section{Conclusion}
 In this paper, we analyze compute and memory characteristics of FM-index, and find that data movement contributes to a significant portion of the total energy consumption. Our analysis reveals that the majority of this data movement comes from a number of simple functions. We revisit the processing-in-memory concept in the new context of (1) simple but effective integration of logic and memory through 3D stacking and (2) emerging genomic processing requires large amount of memory bandwidth. To this end, we propose a PIM accelerator for DNA alignment. GeneF fratures (1) many customized RISC-V based PEs inside a 3D stacking memory, (2) a light message mechanism that can hide remote access latency using in-place computing, (3) specialized prefetchers for simpler PE design. We showed that GeneF significantly outperforms traditional CPUs and ASIC implementations in terms of both performance and energy efficiency. We conclude that reducing data movement via processing-in-memory is a promising approach to improve both the performance and energy efficiency of genomic workloads in the future.
 
-
-\begin{thebibliography}{00}
-\bibitem{b1} G. Eason, B. Noble, and I. N. Sneddon, ``On certain integrals of Lipschitz-Hankel type involving products of Bessel functions,'' Phil. Trans. Roy. Soc. London, vol. A247, pp. 529--551, April 1955.
-\bibitem{b2} J. Clerk Maxwell, A Treatise on Electricity and Magnetism, 3rd ed., vol. 2. Oxford: Clarendon, 1892, pp.68--73.
-\bibitem{b3} I. S. Jacobs and C. P. Bean, ``Fine particles, thin films and exchange anisotropy,'' in Magnetism, vol. III, G. T. Rado and H. Suhl, Eds. New York: Academic, 1963, pp. 271--350.
-\bibitem{b4} K. Elissa, ``Title of paper if known,'' unpublished.
-\bibitem{b5} R. Nicole, ``Title of paper with only first word capitalized,'' J. Name Stand. Abbrev., in press.
-\bibitem{b6} Y. Yorozu, M. Hirano, K. Oka, and Y. Tagawa, ``Electron spectroscopy studies on magneto-optical media and plastic substrate interface,'' IEEE Transl. J. Magn. Japan, vol. 2, pp. 740--741, August 1987 [Digests 9th Annual Conf. Magnetics Japan, p. 301, 1982].
-\bibitem{b7} M. Young, The Technical Writer's Handbook. Mill Valley, CA: University Science, 1989.
-\end{thebibliography}
-\vspace{12pt}
-\color{red}
-IEEE conference templates contain guidance text for composing and formatting conference papers. Please ensure that all template text is removed from your conference paper prior to submission to the conference. Failure to remove the template text from your paper may result in your paper not being published.
+%%%%%%%%% -- BIB STYLE AND FILE -- %%%%%%%%
+\bibliographystyle{ieeetr}
+\bibliography{ref}
 
 \end{document}
