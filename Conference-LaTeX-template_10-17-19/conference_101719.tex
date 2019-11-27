@@ -3,11 +3,15 @@
 % The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
 \usepackage{cite}
 \usepackage{amsmath,amssymb,amsfonts}
-\usepackage{algorithmic}
+%\usepackage{algorithmic}
 \usepackage{graphicx}
 \usepackage{textcomp}
 \usepackage{xcolor}
 \usepackage{todonotes}
+\usepackage[ruled,vlined]{algorithm2e}
+\usepackage{threeparttable}
+
+
 
 \newcommand*\circled[1]{\tikz[baseline=(char.base)]{
 		\node[shape=circle,fill,inner sep=0.5pt] (char) {\textcolor{white}{#1}};}}
@@ -40,13 +44,17 @@ The first and critical processing step is alignment, which performed per-read gr
 Depending on different generations of sequencing~\cite{}, the time cost of seed and extend varies sharply. 
 The reason is that the de facto standard for \textit{extend} is Smith-Waterman dynamic programming algorithm with time complexity as \textit{\textit{O}($N^2$)}, where \textit{N} is the length of sequence reads. 
 Commonly, the length of sequence reads of NGS is as short as $50 - 200$ base-pairs (A, C, G, T), which is much shorter than that of the first or the third generation of sequencing. 
-Unfortunately, Darwin-like coprocessors are not designed to process such short reads since its thousand times speedup depends on the parallelism exposed by aligning long reads (e.g., >1K base-pair). Darwin coprocessors work well on alignment algorithms for long sequence reads only and when \textit{extend} dominates mapping time.
+Unfortunately, Darwin-like coprocessors are not designed to process such short reads since its thousand times speedup depends on the parallelism exposed by aligning long reads (e.g., $>$1K base-pair). Darwin coprocessors work well on alignment algorithms for long sequence reads only and when \textit{extend} dominates mapping time.
 However, when processing NGS reads, \textit{extend} is not the performance bottleneck. 
 The execution time of the most widely used reads alignment tool BWA~\cite{li2013aligning} is dominated 29\% to 70\% by the prior procedure \textit{FM-index search} of \textit{extend} to find exact matched seeds. However, FM-index has not been well studied because of its two challenges: 
 
+\textcolor{blue}{
 First, massive random memory access leads to huge data movement between processing units and memory on traditional von Neumann architecture~\cite{}, which results in resulting in bottlenecks of both performance and energy~\cite{}. Various compute-centric hardware approaches, such as multi-core~\cite{}, GPU~\cite{}, and FPGA~\cite{} have been explored to accelerate DNA seeding. However, innovations that only focus on the computation have limited space for improvement, since DNA seeding is memory bound~\cite{}. 
+}
 
-\textcolor{blue}{Second, \textit{system performance is limited by the main memory capacity and bandwidth per server.} Due to the pin count limitation per chip, For instance, Kocberber et al.~\cite{Kocberber:2013bb} observed that using more than four index traversal units. Wang et al.~\cite{yuanrong} observed that using more than 48 PEs will not provide additional speedup due to off-chip bandwidth limitations.}
+\textcolor{blue}{
+Second, \textit{system performance is limited by the main memory capacity and bandwidth per server.} Due to the pin count limitation per chip, For instance, Kocberber et al.~\cite{Kocberber:2013bb} observed that using more than four index traversal units. Wang et al.~\cite{yuanrong} observed that using more than 48 PEs will not provide additional speedup due to off-chip bandwidth limitations.
+}
 
 In this paper, we show that processing-in-memory (PIM) can be a key enabler to accelerate genomic data processing with memory-capacity-proportional performance under the current pin count limitation. 
 To investigate the potential benefits of PIM, we first delve into a critical algorithm, FM-index, to understand what underlying functions and characteristics contribute the most to data movement. From our observation, FM-index is with simple functions and primitives (which we refer to as small computation) that are responsible for a significant fraction of the total data movement. Therefore, PIM architectures are promising for design FM-index accelerators to overcome the bandwidth bottleneck. Our design is driven by application characteristics and budget of device. First, due to the strict area budget of PEs of FM-index, the compute logic is required to be fairly simple yet efficient; Second, inherent massive parallelism in FM-index drives an efficient mechanism for communication between PEs resided on a the logic layer of PIM. 
@@ -55,46 +63,49 @@ The main contributions of this paper are as follows:
 
 \begin{itemize}
 
-    \item We analyzed the data movement of FM-index from the computer architecture perspective and found the main bottleneck is the memory subsystem.
+    \item We observe that data movement between the main memory and computation units is a major contribution to the total system cost for FM-index. The most of it is generated by simple operations such as basic arithmetic operations, and bitwise operations, which can be parallelly implemented in simple hardware logic.
     
-    \item We proposed a new design of an application-driven accelerator, called GeneF, for FM-index algorithm that can effectively utilize PIM using 3D-stacked memory technologies.
+    \item We propose a new design of an application-driven accelerator, called GeneF, for FM-index algorithm that can effectively utilize processing-in-memory (PIM). We propose an efficient mechanism for communication between different PEs, which can hide long remote access latencies via the use of non-blocking message passing. We introduce a specialized prefetcher that decouple data access logic from PEs, which can fully pipeline compute and data access.
     
-    \item We proposed an efficient mechanism for communication between different PEs, which can hide long remote access latencies via the use of non-blocking message passing.
-    
-    \item We proposed a specialized prefetcher that decouple data access logic from PEs, which can fully utilize the memory bandwidth.
-    
-    \item Our evaluation showed that GeneF outperforms the best available ASIC solution by 20$\times$. Compared to the state-of-the-art software solution BWA-MEM on conventional systems, we get 1820$\times$ performance speedup and 7032$\times$ energy efficiency gain.
+    \item Our evaluations show that GeneF outperforms the best available ASIC solution by 20$\times$. Compared to the state-of-the-art software solution BWA-MEM on conventional systems, we get 1820$\times$ performance speedup and 7032$\times$ energy efficiency gain.
     
 \end{itemize}
 
 \section{Background and Motivation}
 \subsection{Algorithm Description}
-FM-index~\cite{bwt} is the widely used kernels in many alignment tools~\cite{ahmed2016comparison}, which follows the seed-and-extend model. The seeding stage needs to \textbf{exactly} align seeds of the reads back to the reference genome without any gap as shown in Figure~\ref{fig:algo-fm}. An FM-index is created by first taking the Burrows-Wheeler transform (BWT) of the input text in the following steps. For example, \circled{1} the genome string T = "abracadabra\$", \circled{2} and here it is represented by the matrix M where each row is a rotation of the text, and the rows have been sorted lexicographically. \circled{3} The BWT of the genome string T = "abracadabra\$" is "ard\$rcaaaabb", which is the last column labeled \textbf{L} of matrix M. The data structure has two features, the first xxx. The second is is the i character occurrence of a character c in the last column has the same rank as the ith occurrence of c in the first column. Thus, searching the query seed is done by a last-to-first mapping with the fomula, which can be defined as LF(i) = C[L[i]] + Occ(L[i], i). The C[L[i]] represents the number of symbols in BWT that are lexicographically smaller than character a. Occ(L[i], i) is the number of occurrences of a in the BWT string of the reference genome based on current position i, C[L[i]].
-\begin{figure}[htbp]
-\centering
-\includegraphics[scale=0.25]{Conference-LaTeX-template_10-17-19/fig/fm-algo.pdf}
-\caption{An example of data structures in FM-index based mapping}
-\label{fig:algo-fm}
-\end{figure}
+FM-index~\cite{bwt} is the widely used kernels in many alignment tools~\cite{ahmed2016comparison}, which follows the seed-and-extend model. The seeding stage needs to \textbf{exactly} align seeds of the reads back to the reference genome without any gap as shown in Figure~\ref{fig:algo-fm}. An FM-index is created by first taking the Burrows-Wheeler transform (BWT) of the input text in the following steps. For example, \circled{1} the genome string T = "abracadabra\$", \circled{2} and here it is represented by the matrix M where each row is a rotation of the text, and the rows have been sorted lexicographically. \circled{3} The BWT of the genome string T = "abracadabra\$" is "ard\$rcaaaabb", which is the last column labeled \textbf{L} of matrix M. The data structure has two features, the first xxx. The second is is the i character occurrence of a character c in the last column has the same rank as the ith occurrence of c in the first column. Thus, searching the query seed is done by a last-to-first mapping with the fomula, which can be defined as LF(i) = C[c] + Occ(c, i). The C[L[i]] represents the number of symbols in BWT that are lexicographically smaller than character a. Occ(L[i], i) is the number of occurrences of a in the BWT string of the reference genome based on current position i, C[L[i]].
 
-\subsubsection{Data Movement Analysis}
-We first justify the selection of our target application, i.e., DNA seeding, for two reasons. First, DNA seeding dominates the computational expensive DNA alignment task (the end-to-end application), which contains both DNA seeding and DNA extension. Previous work~\cite{yuanrong} has shown the DNA seeding takes Memory system is certainly the bottleneck for DNA seeding, motivating our key idea of adopting the near-data processing architecture for the accelerator design. Our profiling results in Figure~\ref{fig:data-fm} quantitatively shows the bottleneck. As Figure~\ref{fig:data-fm} shows, the DRAM access accounts for 60\% in the CPI stack analysis; The number of Load/Store instructions takes 43.4\% among total number of instructions in Figure~\ref{fig:data-fm}; The energy breakdown shows that 49.4\% of total energy consumption is consumed by the DRAM.
-\begin{figure}[htbp]
+\begin{algorithm}[!htbp]
+\LinesNumbered
+\caption{FM-index based Seeding Algorithm}\label{algo:fm}
+\small
+\KwIn{Query sequence $SD[d]$, Reference genome $R[len]$}
+\KwOut{Matching locations}
+%Preprocess: Derive $B_R[len]$, $S_R[len]$, $C_R[4]$, and $O_R[len+1][4]$;\\
+\While{$sp <= ep$ and $i >= 2$} {
+    $c \leftarrow P[i-1]$;\\
+    \lIf{$x = EoF$} {\textbf{break}}
+    $sp = C[c] + Occ[c, sp-1]+1$;\\
+    $ep = C[c] + Occ[c, ep]$;\\
+    $i \leftarrow i - 1$;\\
+}
+
+\lIf{$ep < sp$}{\Return $Not \ found$}
+\lElse {\Return $ep - sp + 1$}
+\end{algorithm}
+
+\subsection{FM-index Search on Conventional Systems}
+FM-index search is a challenging task for conventional system. Our profiling results in Figure~\ref{fig:data-fm} quantitatively shows the bottleneck. As Figure~\ref{fig:data-fm} shows, the DRAM access accounts for 60\% in the CPI stack analysis; The number of Load/Store instructions takes 43.4\% among total number of instructions in Figure~\ref{fig:data-fm}; The energy breakdown shows that 49.4\% of total energy consumption is consumed by the DRAM. We find that the main reason of huge data movement and the suitability for PIM execution. For each base \textit{m}, new values of \textit{sp} and \textit{ep} are computed by accessing two locations of the \textit{Occ} structure. These locations depend on m and the current values of \textit{sp} and \textit{ep}. There is no defined pattern between successive values of \textit{sp} and \textit{ep}. While \textit{Occ} is a huge data structure. Accessing the elements stored in the BWT index requires pointer-chasing and is also referred to as FM-index-search (FIS). FIS is intrinsically a sequential operation because of the data dependency to the next address, and also often accesses random addresses. Thus, architectural advances in modern processors (e.g., multiple cache hierarchies, MLP, and prefetching) provide limited performance improvement for this phase. In addition, while the computation for FIS is relatively simple as shown in~\cite{yuanrong}, the main-memory latency is critical to the overall performance, which cannot be handled by the current memory hierarchies. Previous work~\cite{yuanrong} shows that for FM-index search, only a few types of operations are dominative, e.g., memory copy operations, bitwise operations, and simple arithmetic operations like integer addition/subtraction and integer shifting. Many other operations are needless, such as floating-point operations, multiplication/division, vector and other complicated operations. In short, FIS is characterized by a large number of data movements generated by simple operations. This lead to the key question in this paper: \textit{how can we provide large amounts memory bandwidth to such simple operations?}
+
+\begin{figure}[!htbp]
 \centering
-\includegraphics[scale=0.44]{Conference-LaTeX-template_10-17-19/fig/data-fm.pdf}
+\includegraphics[scale=0.4]{Conference-LaTeX-template_10-17-19/fig/data-fm.pdf}
 \caption{Profiling the FM-index kernel in BWA-MEM with Sniper and configuration in Table II: (a) CPI stack; (b) Instruction statistics; (c) Energy breakdown.}
 \label{fig:data-fm}
 \end{figure}
 
-%We conclude that the Occ4 function are responsible for a significant portion of the data movement that take place during seeding phase.
-
-\subsubsection{Analysis of PIM Effectiveness}
-In this section, we analyze the main reason of huge data movement and the suitability for PIM execution. For each base m, new values of sp and ep are computed by accessing two locations of the Occ structure. These locations depend on m and the current values of sp and ep. There is no defined pattern between successive values of sp and ep. While Occ is a huge data structure. Accessing the elements stored in the BWT index requires pointer-chasing and is also referred to as FM-index-search (FIS). FIS is intrinsically a sequential operation because of the data dependency to the next address, and also often accesses random addresses. Thus, architectural advances in modern processors (e.g., multiple cache hierarchies, MLP, and prefetching) provide limited performance improvement for this phase. In addition, while the computation for FIS is relatively simple as shown in~\cite{yuanrong}, the main-memory latency is critical to the overall performance.
-
-The access location in the BWT table jumps irregularly with large strides. there seems to be little locality between consecutive access locations. The irregular memory access is the main reason for the high. PIM will reduce huge data movement and short access latency. Furthermore, the behaviors of individual seeding tasks, i.e., the elemental task for parallel computing, are independent, PIM will provide high parallelism.
-
-Previous work~\cite{yuanrong} shows that for FM-index search, only a few types of operations are dominative, e.g., memory copy operations, bitwise operations, and simple arithmetic operations like integer addition/subtraction and integer shifting. Many other operations are needless, such as floating-point operations, multiplication/division, vector and other complicated operations. These operations can be performed at high performance on PIM core or our customized PIM accelerator (see Section~\ref{sec:arch}). We detail the design of PIM accelerator and evaluate the energy efficiency and performance PIM accelerator for FM-index in Section~\ref{sec:arch}.
-
+\subsection{Processing-in-Memory}
+\textit{Processing-in-memory} (PIM) has becoming a promising solution due to the emergence of 3D-stacked DRAM architecture, which stack multiple DRAM layers using vertical \textit{through-silicon vias} (TSVs) to provide much greater bandwidth between layers. 3D-stacked DRAM architectures (e.g., HBM~\cite{3Dstacking}, HMC~\cite{3Dstacking}) involve a base \textit{logic layer} within the stack. Considering a system composed of 16 8GB HMCs as an example, conventional processors are still limited to 320 GB/s of memory bandwidth assuming that the CPU chip has the same number of off-chip links as that of an HMC. In contrast, PIM exposes 8 TB/s (= 16 Cubes $\times$ 512 GB/s) of aggregate internal bandwidth to the in-memory computation units. This internal bandwidth, which can be expanded with memory capacity, is very important for big data applications. By moving computation inside memory, PIM can satisfy the high memory bandwidth requirement of FIS. The access location in the BWT table jumps irregularly with large strides. there seems to be little locality between consecutive access locations. The irregular memory access is the main reason for the high. PIM will reduce huge data movement and short access latency. Furthermore, the behaviors of individual seeding tasks, i.e., the elemental task for parallel computing, are independent, PIM will provide high parallelism. However, moving compute logic inside memory brings two critical questions: (1) How to design an architecture that fully utilize the internal memory bandwidth? (2) how to communicate between different partitions to be performed in parallel?
 
 \section{GeneF Architecture}
 \label{sec:arch}
