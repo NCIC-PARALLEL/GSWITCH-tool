@@ -8,6 +8,10 @@
 \usepackage{textcomp}
 \usepackage{xcolor}
 \usepackage{todonotes}
+
+\newcommand*\circled[1]{\tikz[baseline=(char.base)]{
+		\node[shape=circle,fill,inner sep=0.5pt] (char) {\textcolor{white}{#1}};}}
+		
 \def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
     T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 \begin{document}
@@ -64,9 +68,8 @@ The main contributions of this paper are as follows:
 \end{itemize}
 
 \section{Background and Motivation}
-\subsection{FM-index}
-\subsubsection{Algorithm Description}
-Full-text minute-space (FM) index~\cite{bwt} is the widely used kernels in many align tools~\cite{ahmed2016comparison}, which follows the seed-and-extend model. The seeding stage needs to \textbf{exactly} align seeds of the reads back to the reference genome without any gap as shown in Figure~\ref{fig:algo-fm}. An FM-index is created by first taking the Burrows-Wheeler transform (BWT) of the input text in the following steps. For example, \circled{1} the genome string T = "abracadabra\$", \circled{2} and here it is represented by the matrix M where each row is a rotation of the text, and the rows have been sorted lexicographically. \circled{3} The BWT of the genome string T = "abracadabra\$" is "ard\$rcaaaabb", which is the last column labeled \textbf{L} of matrix M. The data structure has two features, the first xxx. The second is is the i character occurrence of a character c in the last column has the same rank as the ith occurrence of c in the first column. Thus, searching the query seed is done by a last-to-first mapping with the fomula, which can be defined as LF(i) = C[L[i]] + Occ(L[i], i). The C[L[i]] represents the number of symbols in BWT that are lexicographically smaller than character a. Occ(L[i], i) is the number of occurrences of a in the BWT string of the reference genome based on current position i, C[L[i]].
+\subsection{Algorithm Description}
+FM-index~\cite{bwt} is the widely used kernels in many alignment tools~\cite{ahmed2016comparison}, which follows the seed-and-extend model. The seeding stage needs to \textbf{exactly} align seeds of the reads back to the reference genome without any gap as shown in Figure~\ref{fig:algo-fm}. An FM-index is created by first taking the Burrows-Wheeler transform (BWT) of the input text in the following steps. For example, \circled{1} the genome string T = "abracadabra\$", \circled{2} and here it is represented by the matrix M where each row is a rotation of the text, and the rows have been sorted lexicographically. \circled{3} The BWT of the genome string T = "abracadabra\$" is "ard\$rcaaaabb", which is the last column labeled \textbf{L} of matrix M. The data structure has two features, the first xxx. The second is is the i character occurrence of a character c in the last column has the same rank as the ith occurrence of c in the first column. Thus, searching the query seed is done by a last-to-first mapping with the fomula, which can be defined as LF(i) = C[L[i]] + Occ(L[i], i). The C[L[i]] represents the number of symbols in BWT that are lexicographically smaller than character a. Occ(L[i], i) is the number of occurrences of a in the BWT string of the reference genome based on current position i, C[L[i]].
 \begin{figure}[htbp]
 \centering
 \includegraphics[scale=0.25]{Conference-LaTeX-template_10-17-19/fig/fm-algo.pdf}
@@ -194,7 +197,7 @@ As shown in Figure~\ref{fig:PE_Number}, we quantized the number of PEs under eac
 \section{Experiment}
 \begin{figure*}[t]
 \centering
-\includegraphics[scale=0.4]{Conference-LaTeX-template_10-17-19/fig/result.png}
+\includegraphics[scale=0.55]{Conference-LaTeX-template_10-17-19/fig/result.pdf}
 \caption{Profiling the FM-index kernel in BWA-MEM with Sniper and configuration in Table II: (a) CPI stack; (b) Instruction statistics; (c) Energy breakdown.}
 \label{fig:data-fm}
 \end{figure*}
